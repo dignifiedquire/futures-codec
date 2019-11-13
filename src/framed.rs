@@ -68,20 +68,20 @@ impl<T: AsyncWrite + Unpin, U> AsyncWrite for Fuse<T, U> {
 ///     assert_eq!(cur.get_ref(), b"Hello world!");
 /// })
 /// ```
-pub struct Framed<T, U> {
-    inner: FramedRead2<FramedWrite2<Fuse<T, U>>>,
+pub struct Framed<'a, T, U> {
+    inner: FramedRead2<'a, FramedWrite2<Fuse<T, U>>>,
 }
 
-impl<T, U> Framed<T, U>
+impl<'a, T, U> Framed<'a, T, U>
 where
     T: AsyncRead + AsyncWrite,
-    U: Decoder + Encoder,
+    U: Decoder<'a> + Encoder,
 {
     /// Creates a new `Framed` transport with the given codec.
     /// A codec is a type which implements `Decoder` and `Encoder`.
-    pub fn new(inner: T, codec: U) -> Self {
+    pub fn new(inner: T, codec: U, pool: &'a byte_pool::BytePool) -> Self {
         Self {
-            inner: framed_read_2(framed_write_2(Fuse(inner, codec))),
+            inner: framed_read_2(framed_write_2(Fuse(inner, codec)), pool),
         }
     }
 
@@ -92,10 +92,10 @@ where
     }
 }
 
-impl<T, U> Stream for Framed<T, U>
+impl<'a, T, U> Stream for Framed<'a, T, U>
 where
     T: AsyncRead + Unpin,
-    U: Decoder,
+    U: Decoder<'a>,
 {
     type Item = Result<U::Item, U::Error>;
 
@@ -104,7 +104,7 @@ where
     }
 }
 
-impl<T, U> Sink<U::Item> for Framed<T, U>
+impl<'a, T, U> Sink<U::Item> for Framed<'a, T, U>
 where
     T: AsyncWrite + Unpin,
     U: Encoder,

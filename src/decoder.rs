@@ -1,33 +1,42 @@
 use super::framed::Fuse;
 use super::framed_write::FramedWrite2;
-use bytes::BytesMut;
+use byte_pool::Block;
 use std::io::Error;
 
+/// The result of attempting a decoding.
+pub enum DecodeResult<'a, I> {
+    /// Returned when a value was successfully decoded.
+    Some(I),
+    /// Returned when parsing is not complete yet. Returns the used buffer for further
+    /// filling.
+    None(Block<'a>),
+}
+
 /// Decoding of frames via buffers, for use with `FramedRead`.
-pub trait Decoder {
+pub trait Decoder<'a> {
     /// The type of items returned by `decode`
     type Item;
     /// The type of decoding errors.
     type Error: From<Error>;
 
-    /// Decode an item from the src `BytesMut` into an item
-    fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error>;
+    /// Decode an item from the src `Block` into an item. Must return
+    fn decode(&mut self, src: Block<'a>) -> Result<DecodeResult<'a, Self::Item>, Self::Error>;
 }
 
-impl<T, U: Decoder> Decoder for Fuse<T, U> {
+impl<'a, T, U: Decoder<'a>> Decoder<'a> for Fuse<T, U> {
     type Item = U::Item;
     type Error = U::Error;
 
-    fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
+    fn decode(&mut self, src: Block<'a>) -> Result<DecodeResult<'a, Self::Item>, Self::Error> {
         self.1.decode(src)
     }
 }
 
-impl<T: Decoder> Decoder for FramedWrite2<T> {
+impl<'a, T: Decoder<'a>> Decoder<'a> for FramedWrite2<T> {
     type Item = T::Item;
     type Error = T::Error;
 
-    fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
+    fn decode(&mut self, src: Block<'a>) -> Result<DecodeResult<'a, Self::Item>, Self::Error> {
         self.inner.decode(src)
     }
 }

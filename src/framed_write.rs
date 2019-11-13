@@ -1,6 +1,5 @@
 use super::framed::Fuse;
 use super::Encoder;
-use bytes::BytesMut;
 use futures::io::{AsyncRead, AsyncWrite};
 use futures::{ready, Sink};
 use std::io::{Error, ErrorKind};
@@ -108,7 +107,7 @@ where
 pub struct FramedWrite2<T> {
     pub inner: T,
     pub high_water_mark: usize,
-    buffer: BytesMut,
+    buffer: Vec<u8>, // TODO use ring buffer
 }
 
 // 2^17 bytes, which is slightly over 60% of the default
@@ -119,7 +118,7 @@ pub fn framed_write_2<T>(inner: T) -> FramedWrite2<T> {
     FramedWrite2 {
         inner,
         high_water_mark: DEFAULT_SEND_HIGH_WATER_MARK,
-        buffer: BytesMut::with_capacity(1028 * 8),
+        buffer: Vec::with_capacity(1028 * 8),
     }
 }
 
@@ -150,7 +149,8 @@ where
                 return Poll::Ready(Err(err_eof().into()));
             }
 
-            this.buffer.advance(num_write);
+            // TODO: track position
+            // this.buffer.advance(num_write);
         }
 
         Poll::Ready(Ok(()))
@@ -169,7 +169,8 @@ where
                 return Poll::Ready(Err(err_eof().into()));
             }
 
-            this.buffer.advance(num_write);
+            // TODO: advance buffer
+            // this.buffer.advance(num_write);
         }
 
         Pin::new(&mut this.inner).poll_flush(cx).map_err(Into::into)

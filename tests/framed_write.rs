@@ -1,4 +1,3 @@
-use bytes::Bytes;
 use core::iter::Iterator;
 use futures::io::AsyncWrite;
 use futures::sink::SinkExt;
@@ -13,15 +12,20 @@ use std::pin::Pin;
 struct ZeroBytes {
     pub count: usize,
     pub limit: usize,
+    pub pool: byte_pool::BytePool,
 }
+
 impl Iterator for ZeroBytes {
-    type Item = Bytes;
+    type Item = byte_pool::Block<'_>;
+
     fn next(&mut self) -> Option<Self::Item> {
         if self.count >= self.limit {
             None
         } else {
             self.count += 1;
-            Some(Bytes::from_static(b"\0"))
+            let mut block = self.pool.alloc(1);
+            block[0] = b"\0";
+            Some(block)
         }
     }
 }

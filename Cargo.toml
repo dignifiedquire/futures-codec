@@ -13,6 +13,6 @@ keywords = ["future", "futures", "async", "codec"]
 categories = ["asynchronous", "network-programming"]
 
 [dependencies]
-bytes = "0.4.12"
 futures-preview = "0.3.0-alpha.17"
 memchr = "2.2.1"
+byte-pool = { path = "../byte-pool" }

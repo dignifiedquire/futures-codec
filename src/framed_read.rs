@@ -1,7 +1,6 @@
 use super::framed::Fuse;
-use super::Decoder;
+use super::{DecodeResult, Decoder};
 
-use bytes::BytesMut;
 use futures::io::AsyncRead;
 use futures::{ready, Sink, Stream, TryStreamExt};
 use std::io;
@@ -26,19 +25,19 @@ use std::task::{Context, Poll};
 ///     assert_eq!(msg, Bytes::from(&buf[..]));
 /// })
 /// ```
-pub struct FramedRead<T, D> {
-    inner: FramedRead2<Fuse<T, D>>,
+pub struct FramedRead<'a, T, D> {
+    inner: FramedRead2<'a, Fuse<T, D>>,
 }
 
-impl<T, D> FramedRead<T, D>
+impl<'a, T, D> FramedRead<'a, T, D>
 where
     T: AsyncRead,
-    D: Decoder,
+    D: Decoder<'a>,
 {
     /// Creates a new `FramedRead` transport with the given `Decoder`.
-    pub fn new(inner: T, decoder: D) -> Self {
+    pub fn new(inner: T, decoder: D, pool: &'a byte_pool::BytePool) -> Self {
         Self {
-            inner: framed_read_2(Fuse(inner, decoder)),
+            inner: framed_read_2(Fuse(inner, decoder), pool),
         }
     }
 
@@ -49,10 +48,10 @@ where
     }
 }
 
-impl<T, D> Stream for FramedRead<T, D>
+impl<'a, T, D> Stream for FramedRead<'a, T, D>
 where
     T: AsyncRead + Unpin,
-    D: Decoder,
+    D: Decoder<'a>,
 {
     type Item = Result<D::Item, D::Error>;
 
@@ -61,43 +60,56 @@ where
     }
 }
 
-pub struct FramedRead2<T> {
+pub struct FramedRead2<'a, T> {
     inner: T,
-    buffer: BytesMut,
+    pool: &'a byte_pool::BytePool,
+    buffer: byte_pool::Block<'a>,
+    pos: usize,
 }
 
 const INITIAL_CAPACITY: usize = 8 * 1024;
 
-pub fn framed_read_2<T>(inner: T) -> FramedRead2<T> {
+pub fn framed_read_2<'a, T>(inner: T, pool: &'a byte_pool::BytePool) -> FramedRead2<'a, T> {
     FramedRead2 {
         inner,
-        buffer: BytesMut::with_capacity(INITIAL_CAPACITY),
+        pool,
+        buffer: pool.alloc(INITIAL_CAPACITY),
+        pos: 0,
     }
 }
 
-impl<T> Stream for FramedRead2<T>
+impl<'a, T> Stream for FramedRead2<'a, T>
 where
-    T: AsyncRead + Decoder + Unpin,
+    T: AsyncRead + Decoder<'a> + Unpin,
 {
     type Item = Result<T::Item, T::Error>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let this = &mut *self;
 
-        if let Some(item) = this.inner.decode(&mut this.buffer)? {
-            return Poll::Ready(Some(Ok(item)));
+        let buf = std::mem::replace(&mut this.buffer, this.pool.alloc(INITIAL_CAPACITY));
+        match this.inner.decode(buf)? {
+            DecodeResult::Some(item) => {
+                return Poll::Ready(Some(Ok(item)));
+            }
+            DecodeResult::None(buf) => {
+                std::mem::replace(&mut this.buffer, buf);
+            }
         }
 
-        let mut buf = [0u8; INITIAL_CAPACITY];
-
         loop {
-            let n = ready!(Pin::new(&mut this.inner).poll_read(cx, &mut buf))?;
-            this.buffer.extend_from_slice(&buf[..n]);
+            let n = ready!(Pin::new(&mut this.inner).poll_read(cx, &mut this.buffer[this.pos..]))?;
 
-            match this.inner.decode(&mut this.buffer)? {
-                Some(item) => return Poll::Ready(Some(Ok(item))),
-                None => {
-                    if this.buffer.is_empty() {
+            // TODO: pass in valid size
+            this.pos += n;
+
+            let buf = std::mem::replace(&mut this.buffer, this.pool.alloc(INITIAL_CAPACITY));
+            match this.inner.decode(buf)? {
+                DecodeResult::Some(item) => return Poll::Ready(Some(Ok(item))),
+                DecodeResult::None(buf) => {
+                    std::mem::replace(&mut this.buffer, buf);
+
+                    if this.pos == 0 {
                         return Poll::Ready(None);
                     } else if n == 0 {
                         return Poll::Ready(Some(Err(io::Error::new(
@@ -112,7 +124,7 @@ where
     }
 }
 
-impl<T, I> Sink<I> for FramedRead2<T>
+impl<'a, T, I> Sink<I> for FramedRead2<'a, T>
 where
     T: Sink<I> + Unpin,
 {
@@ -132,7 +144,7 @@ where
     }
 }
 
-impl<T> FramedRead2<T> {
+impl<'a, T> FramedRead2<'a, T> {
     pub fn release(self: Self) -> T {
         self.inner
     }

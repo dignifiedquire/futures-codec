@@ -23,11 +23,11 @@
 //! };
 //! ```
 
-mod codec;
-pub use codec::{BytesCodec, LinesCodec, LengthCodec};
+// mod codec;
+// pub use codec::{BytesCodec, LinesCodec, LengthCodec};
 
 mod decoder;
-pub use decoder::Decoder;
+pub use decoder::{DecodeResult, Decoder};
 
 mod encoder;
 pub use encoder::Encoder;
