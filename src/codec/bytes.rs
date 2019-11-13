@@ -1,4 +1,5 @@
-use crate::{Decoder, Encoder};
+use crate::{DecodeResult, Decoder, Encoder};
+use byte_pool::Block;
 use std::io::Error;
 
 /// A simple codec that ships bytes around
@@ -18,8 +19,8 @@ use std::io::Error;
 ///     let cur = Cursor::new(&mut buf);
 ///     let mut framed = Framed::new(cur, BytesCodec {});
 ///
-///     let msg = Bytes::from("Hello World!");
-///     framed.send(msg).await.unwrap();
+///     let msg = b"Hello World!";
+///     framed.send(msg.to_vec()).await.unwrap();
 ///
 ///     while let Some(msg) = framed.try_next().await.unwrap() {
 ///         println!("{:?}", msg);
@@ -29,25 +30,25 @@ use std::io::Error;
 pub struct BytesCodec {}
 
 impl Encoder for BytesCodec {
-    type Item = Bytes;
+    type Item = Vec<u8>;
     type Error = Error;
 
-    fn encode(&mut self, src: Self::Item, dst: &mut BytesMut) -> Result<(), Self::Error> {
+    fn encode(&mut self, src: Self::Item, dst: &mut Vec<u8>) -> Result<(), Self::Error> {
         dst.extend_from_slice(&src);
         Ok(())
     }
 }
 
-impl Decoder for BytesCodec {
-    type Item = Bytes;
+impl<'a> Decoder<'a> for BytesCodec {
+    type Item = Block<'a>;
     type Error = Error;
 
-    fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
+    fn decode(&mut self, src: Block<'a>) -> Result<DecodeResult<'a, Self::Item>, Self::Error> {
         let len = src.len();
         if len > 0 {
-            Ok(Some(src.split_to(len).freeze()))
+            Ok(DecodeResult::Some(src))
         } else {
-            Ok(None)
+            Ok(DecodeResult::None(src))
         }
     }
 }

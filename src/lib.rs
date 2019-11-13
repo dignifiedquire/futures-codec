@@ -23,8 +23,8 @@
 //! };
 //! ```
 
-// mod codec;
-// pub use codec::{BytesCodec, LinesCodec, LengthCodec};
+mod codec;
+pub use codec::{BytesCodec, LengthCodec, LinesCodec};
 
 mod decoder;
 pub use decoder::{DecodeResult, Decoder};

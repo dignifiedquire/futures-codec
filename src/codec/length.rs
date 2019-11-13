@@ -1,4 +1,5 @@
-use crate::{Decoder, Encoder};
+use crate::{DecodeResult, Decoder, Encoder};
+use byte_pool::Block;
 use std::io::Error;
 
 const U64_LENGTH: usize = std::mem::size_of::<u64>();
@@ -46,34 +47,35 @@ const U64_LENGTH: usize = std::mem::size_of::<u64>();
 pub struct LengthCodec;
 
 impl Encoder for LengthCodec {
-    type Item = Bytes;
+    type Item = Vec<u8>;
     type Error = Error;
 
-    fn encode(&mut self, src: Self::Item, dst: &mut BytesMut) -> Result<(), Self::Error> {
-        dst.reserve(U64_LENGTH + src.len());
-        dst.put_u64_be(src.len() as u64);
+    fn encode(&mut self, src: Self::Item, dst: &mut Vec<u8>) -> Result<(), Self::Error> {
+        dst.extend_from_slice(&(src.len() as u64).to_be_bytes());
         dst.extend_from_slice(&src);
         Ok(())
     }
 }
 
-impl Decoder for LengthCodec {
-    type Item = byte_pool::Block<'a>;
+impl<'a> Decoder<'a> for LengthCodec {
+    type Item = Block<'a>;
     type Error = Error;
 
-    fn decode(&mut self, src: byte_pool::Block<'_>) -> Result<Option<Self::Item>, Self::Error> {
+    fn decode(
+        &mut self,
+        src: byte_pool::Block<'a>,
+    ) -> Result<DecodeResult<'a, Self::Item>, Self::Error> {
         if src.len() < U64_LENGTH {
-            return Ok(None);
+            return Ok(DecodeResult::None(src));
         }
         let mut arr = [0u8; U64_LENGTH];
         arr.copy_from_slice(&src[..U64_LENGTH]);
         let len = u64::from_be_bytes(arr);
 
-        if src.len() - U64_LENGTH >= len {
-            src.advance(U64_LENGTH);
-            Ok(Some(src.split_to(len).freeze()))
+        if src.len() - U64_LENGTH >= len as usize {
+            Ok(DecodeResult::Some(src))
         } else {
-            Ok(None)
+            Ok(DecodeResult::None(src))
         }
     }
 }

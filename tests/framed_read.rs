@@ -30,7 +30,9 @@ impl AsyncRead for MockBurstySender {
 #[test]
 fn line_read_multi() {
     let io = MockBurstySender { sent: false };
-    let mut framed = FramedRead::new(io, LinesCodec {});
+    let pool = byte_pool::BytePool::new();
+
+    let mut framed = FramedRead::new(io, LinesCodec {}, &pool);
     let one = executor::block_on(framed.next()).unwrap().unwrap();
     assert_eq!(one, "one\n");
     let two = executor::block_on(framed.next()).unwrap().unwrap();

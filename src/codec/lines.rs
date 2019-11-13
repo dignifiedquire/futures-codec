@@ -1,6 +1,8 @@
-use crate::{Decoder, Encoder};
+use crate::{DecodeResult, Decoder, Encoder};
 use memchr::memchr;
 use std::io::{Error, ErrorKind};
+
+use byte_pool::Block;
 
 /// A simple `Codec` implementation that splits up data into lines.
 pub struct LinesCodec {}
@@ -9,26 +11,22 @@ impl Encoder for LinesCodec {
     type Item = String;
     type Error = Error;
 
-    fn encode(&mut self, item: Self::Item, dst: &mut BytesMut) -> Result<(), Self::Error> {
-        dst.reserve(item.len());
-        dst.put(item);
+    fn encode(&mut self, item: Self::Item, dst: &mut Vec<u8>) -> Result<(), Self::Error> {
+        dst.extend_from_slice(item.as_bytes());
         Ok(())
     }
 }
 
-impl Decoder for LinesCodec {
+impl<'a> Decoder<'a> for LinesCodec {
     type Item = String;
     type Error = Error;
 
-    fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
-        match memchr(b'\n', src) {
-            Some(pos) => {
-                let buf = src.split_to(pos + 1);
-                String::from_utf8(buf.to_vec())
-                    .map(Some)
-                    .map_err(|e| Error::new(ErrorKind::InvalidData, e))
-            }
-            _ => Ok(None),
+    fn decode(&mut self, src: Block<'a>) -> Result<DecodeResult<'a, Self::Item>, Self::Error> {
+        match memchr(b'\n', &src[..]) {
+            Some(pos) => std::str::from_utf8(&src[..pos + 1])
+                .map(|s| DecodeResult::Some(s.to_string()))
+                .map_err(|e| Error::new(ErrorKind::InvalidData, e)),
+            _ => Ok(DecodeResult::None(src)),
         }
     }
 }

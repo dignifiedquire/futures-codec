@@ -155,10 +155,12 @@ where
 
         Poll::Ready(Ok(()))
     }
+
     fn start_send(mut self: Pin<&mut Self>, item: T::Item) -> Result<(), Self::Error> {
         let this = &mut *self;
         this.inner.encode(item, &mut this.buffer)
     }
+
     fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
         let this = &mut *self;
 

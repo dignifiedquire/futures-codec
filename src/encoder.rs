@@ -9,14 +9,14 @@ pub trait Encoder {
     type Error: From<Error>;
 
     /// Encodes an item into the `BytesMut` provided by dst.
-    fn encode(&mut self, item: Self::Item, dst: &mut [u8]) -> Result<(), Self::Error>;
+    fn encode(&mut self, item: Self::Item, dst: &mut Vec<u8>) -> Result<(), Self::Error>;
 }
 
 impl<T, U: Encoder> Encoder for Fuse<T, U> {
     type Item = U::Item;
     type Error = U::Error;
 
-    fn encode(&mut self, item: Self::Item, dst: &mut [u8]) -> Result<(), Self::Error> {
+    fn encode(&mut self, item: Self::Item, dst: &mut Vec<u8>) -> Result<(), Self::Error> {
         self.1.encode(item, dst)
     }
 }
