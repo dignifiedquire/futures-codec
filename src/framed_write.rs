@@ -1,5 +1,6 @@
 use super::framed::Fuse;
 use super::Encoder;
+use buf_redux::Buffer;
 use futures::io::{AsyncRead, AsyncWrite};
 use futures::{ready, Sink};
 use std::io::{Error, ErrorKind};
@@ -107,7 +108,7 @@ where
 pub struct FramedWrite2<T> {
     pub inner: T,
     pub high_water_mark: usize,
-    buffer: Vec<u8>, // TODO use ring buffer
+    buffer: Buffer,
 }
 
 // 2^17 bytes, which is slightly over 60% of the default
@@ -118,7 +119,7 @@ pub fn framed_write_2<T>(inner: T) -> FramedWrite2<T> {
     FramedWrite2 {
         inner,
         high_water_mark: DEFAULT_SEND_HIGH_WATER_MARK,
-        buffer: Vec::with_capacity(1028 * 8),
+        buffer: Buffer::with_capacity(1028 * 8), // TODO use ringbuf when available
     }
 }
 
@@ -143,14 +144,13 @@ where
     fn poll_ready(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
         let this = &mut *self;
         while this.buffer.len() >= this.high_water_mark {
-            let num_write = ready!(Pin::new(&mut this.inner).poll_write(cx, &this.buffer))?;
+            let num_write = ready!(Pin::new(&mut this.inner).poll_write(cx, this.buffer.buf()))?;
 
             if num_write == 0 {
                 return Poll::Ready(Err(err_eof().into()));
             }
 
-            // TODO: track position
-            // this.buffer.advance(num_write);
+            this.buffer.consume(num_write);
         }
 
         Poll::Ready(Ok(()))
@@ -165,14 +165,13 @@ where
         let this = &mut *self;
 
         while !this.buffer.is_empty() {
-            let num_write = ready!(Pin::new(&mut this.inner).poll_write(cx, &this.buffer))?;
+            let num_write = ready!(Pin::new(&mut this.inner).poll_write(cx, this.buffer.buf()))?;
 
             if num_write == 0 {
                 return Poll::Ready(Err(err_eof().into()));
             }
 
-            // TODO: advance buffer
-            // this.buffer.advance(num_write);
+            this.buffer.consume(num_write);
         }
 
         Pin::new(&mut this.inner).poll_flush(cx).map_err(Into::into)

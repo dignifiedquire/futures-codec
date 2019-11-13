@@ -1,4 +1,5 @@
 use crate::{DecodeResult, Decoder, Encoder};
+use buf_redux::Buffer;
 use byte_pool::Block;
 use std::io::Error;
 
@@ -33,8 +34,9 @@ impl Encoder for BytesCodec {
     type Item = Vec<u8>;
     type Error = Error;
 
-    fn encode(&mut self, src: Self::Item, dst: &mut Vec<u8>) -> Result<(), Self::Error> {
-        dst.extend_from_slice(&src);
+    fn encode(&mut self, src: Self::Item, dst: &mut Buffer) -> Result<(), Self::Error> {
+        dst.reserve(src.len());
+        dst.copy_from_slice(&src);
         Ok(())
     }
 }

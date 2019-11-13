@@ -1,4 +1,5 @@
 use crate::{DecodeResult, Decoder, Encoder};
+use buf_redux::Buffer;
 use memchr::memchr;
 use std::io::{Error, ErrorKind};
 
@@ -11,8 +12,9 @@ impl Encoder for LinesCodec {
     type Item = String;
     type Error = Error;
 
-    fn encode(&mut self, item: Self::Item, dst: &mut Vec<u8>) -> Result<(), Self::Error> {
-        dst.extend_from_slice(item.as_bytes());
+    fn encode(&mut self, item: Self::Item, dst: &mut Buffer) -> Result<(), Self::Error> {
+        dst.reserve(item.as_bytes().len());
+        dst.copy_from_slice(item.as_bytes());
         Ok(())
     }
 }
