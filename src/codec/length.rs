@@ -58,22 +58,23 @@ impl Encoder for LengthCodec {
 }
 
 impl<'a> Decoder<'a> for LengthCodec {
-    type Item = Block<'a>;
+    type Item = (Block<'a>, usize);
     type Error = Error;
 
     fn decode(
         &mut self,
         src: byte_pool::Block<'a>,
+        size: usize,
     ) -> Result<DecodeResult<'a, Self::Item>, Self::Error> {
-        if src.len() < U64_LENGTH {
+        if size < U64_LENGTH {
             return Ok(DecodeResult::None(src));
         }
         let mut arr = [0u8; U64_LENGTH];
         arr.copy_from_slice(&src[..U64_LENGTH]);
         let len = u64::from_be_bytes(arr);
 
-        if src.len() - U64_LENGTH >= len as usize {
-            Ok(DecodeResult::Some(src))
+        if size - U64_LENGTH >= len as usize {
+            Ok(DecodeResult::Some((src, size)))
         } else {
             Ok(DecodeResult::None(src))
         }

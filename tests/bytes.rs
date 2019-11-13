@@ -10,8 +10,8 @@ fn decodes() {
     let pool = byte_pool::BytePool::new();
     let mut framed = Framed::new(cur, BytesCodec {}, &pool);
 
-    let read = executor::block_on(framed.try_next()).unwrap().unwrap();
-    assert_eq!(&read[..], &expected[..]);
+    let (read, size) = executor::block_on(framed.try_next()).unwrap().unwrap();
+    assert_eq!(&read[..size], &expected[..]);
 
     assert!(executor::block_on(framed.try_next()).unwrap().is_none());
 }

@@ -21,8 +21,12 @@ impl<'a> Decoder<'a> for LinesCodec {
     type Item = String;
     type Error = Error;
 
-    fn decode(&mut self, src: Block<'a>) -> Result<DecodeResult<'a, Self::Item>, Self::Error> {
-        match memchr(b'\n', &src[..]) {
+    fn decode(
+        &mut self,
+        src: Block<'a>,
+        size: usize,
+    ) -> Result<DecodeResult<'a, Self::Item>, Self::Error> {
+        match memchr(b'\n', &src[..size]) {
             Some(pos) => std::str::from_utf8(&src[..pos + 1])
                 .map(|s| DecodeResult::Some(s.to_string()))
                 .map_err(|e| Error::new(ErrorKind::InvalidData, e)),

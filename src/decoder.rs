@@ -20,15 +20,23 @@ pub trait Decoder<'a> {
     type Error: From<Error>;
 
     /// Decode an item from the src `Block` into an item. Must return
-    fn decode(&mut self, src: Block<'a>) -> Result<DecodeResult<'a, Self::Item>, Self::Error>;
+    fn decode(
+        &mut self,
+        src: Block<'a>,
+        size: usize,
+    ) -> Result<DecodeResult<'a, Self::Item>, Self::Error>;
 }
 
 impl<'a, T, U: Decoder<'a>> Decoder<'a> for Fuse<T, U> {
     type Item = U::Item;
     type Error = U::Error;
 
-    fn decode(&mut self, src: Block<'a>) -> Result<DecodeResult<'a, Self::Item>, Self::Error> {
-        self.1.decode(src)
+    fn decode(
+        &mut self,
+        src: Block<'a>,
+        size: usize,
+    ) -> Result<DecodeResult<'a, Self::Item>, Self::Error> {
+        self.1.decode(src, size)
     }
 }
 
@@ -36,7 +44,11 @@ impl<'a, T: Decoder<'a>> Decoder<'a> for FramedWrite2<T> {
     type Item = T::Item;
     type Error = T::Error;
 
-    fn decode(&mut self, src: Block<'a>) -> Result<DecodeResult<'a, Self::Item>, Self::Error> {
-        self.inner.decode(src)
+    fn decode(
+        &mut self,
+        src: Block<'a>,
+        size: usize,
+    ) -> Result<DecodeResult<'a, Self::Item>, Self::Error> {
+        self.inner.decode(src, size)
     }
 }

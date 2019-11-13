@@ -88,8 +88,9 @@ where
         let this = &mut *self;
 
         let buf = std::mem::replace(&mut this.buffer, this.pool.alloc(INITIAL_CAPACITY));
-        match this.inner.decode(buf)? {
+        match this.inner.decode(buf, this.pos)? {
             DecodeResult::Some(item) => {
+                this.pos = 0;
                 return Poll::Ready(Some(Ok(item)));
             }
             DecodeResult::None(buf) => {
@@ -104,8 +105,11 @@ where
             this.pos += n;
 
             let buf = std::mem::replace(&mut this.buffer, this.pool.alloc(INITIAL_CAPACITY));
-            match this.inner.decode(buf)? {
-                DecodeResult::Some(item) => return Poll::Ready(Some(Ok(item))),
+            match this.inner.decode(buf, this.pos)? {
+                DecodeResult::Some(item) => {
+                    this.pos = 0;
+                    return Poll::Ready(Some(Ok(item)));
+                }
                 DecodeResult::None(buf) => {
                     std::mem::replace(&mut this.buffer, buf);
 

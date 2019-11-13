@@ -40,13 +40,16 @@ impl Encoder for BytesCodec {
 }
 
 impl<'a> Decoder<'a> for BytesCodec {
-    type Item = Block<'a>;
+    type Item = (Block<'a>, usize);
     type Error = Error;
 
-    fn decode(&mut self, src: Block<'a>) -> Result<DecodeResult<'a, Self::Item>, Self::Error> {
-        let len = src.len();
-        if len > 0 {
-            Ok(DecodeResult::Some(src))
+    fn decode(
+        &mut self,
+        src: Block<'a>,
+        size: usize,
+    ) -> Result<DecodeResult<'a, Self::Item>, Self::Error> {
+        if size > 0 {
+            Ok(DecodeResult::Some((src, size)))
         } else {
             Ok(DecodeResult::None(src))
         }
